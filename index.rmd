@@ -1,7 +1,7 @@
 ---
-title: "ЭЙ, ЧЕЛОВЕК! ЧТО **ТЫ** ТУТ ЗАБЫЛ?"
-author: "мимо кто-то проходил"
-date: '28 марта 2018 г '
+title: "R-project"
+author: "Jedi this did"
+date: 'A long time ago in a galaxy far, far away....'
 output: html_document
 ---
 
@@ -9,6 +9,219 @@ output: html_document
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
-##**Тут должен быть отчёт,  но это не точно** 
-Вика и Лера привет
+![ ](https://c.radikal.ru/c05/1803/60/f8651cf0df53.png)
 
+##**СОЗДАНИЕ МОДЕЛЕЙ ЛИНЕЙНОЙ РЕГРЕССИИ ДНЕВНЫХ ПОТОКОВ ПАРОВ ВОДЫ ЗА ОСЕННИЙ ПЕРИОД 2013 ГОДА ПО ДАННЫМ ИЗМЕРЕНИЙ МЕТОДОМ ТУРБУЛЕНТНОЙ ПУЛЬСАЦИИ** 
+
+#Обработка данных исходной таблицы#
+
+Для создания модели линейной регрессии дневных потоков паров воды были взяты данные за осенний период 2013 года по данным измерений методом турбулентной пульсации. 
+Табличным данным, надо которыми производилась работа, было присвоено имя tbl для удобства работы
+
+    tbl = read_csv("eddypro.csv")
+  
+В ходе запуска файла “tbl” выяснилось, что переменная представляет собой огромный массив данных, который необходимо преобразовать для дальнейшей работы. Так как данные были получены компьютером, то некоторые отсутствующие значения были представлены в виде “-9999”, которые заменили на "NA". Помимо недостающих значений присутствовали текстовые данные, которые мы удалили, так как они помешали бы проведению обработки данных и корреляции.
+
+    tbl = read_csv("eddypro.csv", skip = 1, na=c("","NA","-9999","-9999.0"),comment =c("["))
+    tbl = tbl [-1,]
+    tbl 
+    names(tbl)
+
+удаляем ненужные столбцы
+
+    tbl = select(tbl, -(roll)) 
+    tbl = tbl [,c(-1,-3,-6,-7,-9,-12,-15,-18,-21,-30,-35,-70,-88:-99)] 
+    names(tbl ) 
+По условия задания регрессионная модель нужна для  дневных потоков водяного пара за осенний период. Поэтому следующим действием было изъятие из общего массива данных нужного периода с показателями.
+
+выбираем заданные в задании время года и время суток
+
+    tbl <- tbl [tbl $DOY>244 & tbl $DOY<315 & tbl $daytime == FALSE, c(1:ncol(tbl))]
+
+#Корреляционный анализ#
+
+В следующем шаге для проведения корреляционного анализа выберем из таблицы только те колонки, которые являются числовыми. Только после этого можно будет провести корреляцию паров воды с другими факторами таблицы «eddy», при этом исключив все значения NA и выбрав только те факторы, коэффициент корреляции которых больше чем 0.1
+
+    tbl = tbl %>% mutate_if(is.character, factor) 
+    names(tbl) = str_replace_all(names(tbl), "[!]","_emph_") 
+    names(tbl) = names(tbl) %>% 
+    str_replace_all("[!]","_emph_") %>% 
+    str_replace_all("[?]","_quest_") %>% 
+    str_replace_all("[*]","_star_") %>% 
+    str_replace_all("[+]","_plus_") %>% 
+    str_replace_all("[-]","_minus_") %>% 
+    str_replace_all("[@]","_at_") %>% 
+    str_replace_all("[$]","_dollar_") %>% 
+    str_replace_all("[#]","_hash_") %>% 
+    str_replace_all("[/]","_div_") %>% 
+    str_replace_all("[%]","_perc_") %>% 
+    str_replace_all("[&]","_amp_") %>% 
+    str_replace_all("[\\^]","_power_") %>% 
+    str_replace_all("[()]","_") 
+    glimpse(tbl) 
+    
+ проводим корреляцию только числовых значений
+    sapply(tbl,is.numeric) 
+    
+    eddy_numeric = tbl [,sapply(eddy,is.numeric) ] 
+    eddy_nonnumeric = tbl [,!sapply(eddy,is.numeric) ] 
+    cor_td = cor(tbl _numeric) 
+    cor_td 
+    cor_td = cor(drop_na(tbl_numeric)) %>% as.data.frame %>% select(h2o_flux) 
+    vars = row.names(cor_td)[cor_td$h2o_flux^2 > .1] %>% na.exclude
+
+#Получение формулы и создание линейной модели#
+
+После проведения корреляции получилась формула зависимости паров воды от переменных. Полученные данные корреляции собираем в модель и проводим анализ адекватности модели, исключая при этом переменные, которые не оказывают при взаимодействии влияния на потоки паров воды
+Наблюдаем P-значения первой модели, отбрасываем те переменные, для которых он принимает незначимые значения.
+
+    formula = as.formula(paste("h2o_flux~", paste(vars,collapse = "+"), sep="")) 
+
+Делаем тест обучающей модели
+
+    row_numbers = 1:length(tbl $date) 
+    teach = sample(row_numbers, floor(length(tbl $date)*.7)) 
+    test = row_numbers[-teach] 
+    teaching_ tbl _unq = tbl [teach,] 
+    testing_ tbl _unq = tbl [test,] 
+    mod = lm(formula, data= tbl) 
+    mod 
+    coef(mod) 
+    resid(mod) 
+    confint(mod) 
+    summary(mod)
+    anova(mod)
+
+далее создаём и анализируем модели множественной регрессии с взаимодействием
+  
+    model1 = lm(h2o_flux ~ (rand_err_Tau + H + LE + rand_err_LE + h2o_flux + rand_err_h2o_flux + co2_molar_density + co2_mixing_ratio + RH + VPD + max_speed + u_star_ + TKE + T_star_ + un_H + un_LE + un_h2o_flux + u_var + 
+    v_var + w_div_ts_cov + w_div_h2o_cov + co2_signal_strength_7200)^2, data = tbl)
+    model1
+    coef(model1) 
+    resid(model1) 
+    confint(model1) 
+    summary(model1)
+    
+R2 равен 1, поэтому убираем лишние переменные и взаимодействия с высокими Р-значениями
+  
+    anova(model1)
+
+Проделываем циклично до тех пор, пока не будет получена идеальная модель, в которой все переменные и взаимодействия будут значимыми, при этом коэффициент детерминации будет оставаться неизменным или меняться незначительно.
+Готовая полученная модель:
+
+    mod3 = lm(h2o_flux~(DOY + Tau + rand_err_Tau + H + LE + rand_err_LE + co2_flux + rand_err_co2_flux + rand_err_h2o_flux + h2o_time_lag + RH + VPD + u_star_ + TKE + T_star_ + un_Tau + un_H + un_LE + un_h2o_flux + mean_value + w_var + w_div_h2o_cov  + h2o_signal_strength_7200)^2-Tau:h2o_time_lag-Tau:VPD-Tau:h2o_signal_strength_7200-rand_err_Tau:mean_value-H:TKE-H:un_H-H:w_var-rand_err_H:h2o_time_lag-rand_err_H:un_h2o_flux-rand_err_H:mean_value-LE:H_strg-LE:RH-LE:un_H-LE:un_LE-rand_err_LE:rand_err_h2o_flux-rand_err_LE:H_strg-rand_err_LE:h2o_signal_strength_7200-rand_err_h2o_flux:H_strg-Tau:RH-Tau:un_H-Tau:w_div_h2o_cov-rand_err_Tau:RH-rand_err_Tau:un_h2o_flux-H:LE-H:rand_err_co2_flux-H:RH-H:mean_value-H:w_div_h2o_cov-LE:u_star_-LE:TKE-LE:T_star_-LE:un_Tau-rand_err_LE:RH-rand_err_LE:VPD-rand_err_LE:un_Tau-rand_err_LE:un_H-rand_err_LE:un_LE-rand_err_LE:mean_value-rand_err_LE:w_div_h2o_cov-co2_flux:rand_err_co2_flux-co2_flux:u_star_-co2_flux:TKE-co2_flux:un_H-co2_flux:un_LE -co2_flux:un_h2o_flux-co2_flux:w_var-co2_flux:w_div_h2o_cov-co2_flux:h2o_signal_strength_7200-rand_err_co2_flux:RH-rand_err_co2_flux:VPD-rand_err_co2_flux:u_star_-rand_err_co2_flux:TKE-rand_err_co2_flux:T_star_-rand_err_co2_flux:un_Tau-rand_err_co2_flux:un_H-rand_err_co2_flux:un_LE-rand_err_co2_flux:mean_value-rand_err_co2_flux:w_var-rand_err_co2_flux:w_div_h2o_cov-rand_err_co2_flux:h2o_signal_strength_7200-rand_err_h2o_flux:u_star_-Tau:un_LE-rand_err_Tau:VPD-rand_err_Tau:u_star_-rand_err_Tau:w_var-H:VPD-LE:co2_flux-LE:VPD-LE:mean_value-LE:w_var-rand_err_LE:rand_err_co2_flux-rand_err_LE:TKE-co2_flux:h2o_time_lag-co2_flux:RH-co2_flux:VPD-co2_flux:mean_value-rand_err_co2_flux:rand_err_h2o_flux-rand_err_h2o_flux:h2o_time_lag-rand_err_h2o_flux:mean_value-rand_err_h2o_flux:h2o_signal_strength_7200-RH-DOY:TKE-Tau:un_h2o_flux-rand_err_Tau:w_div_h2o_cov-H:rand_err_LE-H:u_star_-rand_err_co2_flux:h2o_time_lag-rand_err_h2o_flux:RH-rand_err_h2o_flux:TKE-rand_err_h2o_flux:un_Tau-h2o_time_lag:RH-h2o_time_lag:u_star_-h2o_time_lag:TKE-h2o_time_lag:T_star_-h2o_time_lag:un_Tau-h2o_time_lag:un_LE-h2o_time_lag:w_div_h2o_cov-h2o_time_lag:h2o_signal_strength_7200-RH:un_Tau-RH:un_LE-RH:mean_value-RH:w_var-RH:w_div_h2o_cov-RH:h2o_signal_strength_7200-VPD:TKE-VPD:un_LE-VPD:mean_value-VPD:w_var-VPD:w_div_h2o_cov-Tau:mean_value-H:rand_err_h2o_flux-H:un_LE-H:un_h2o_flux-LE:rand_err_co2_flux-rand_err_LE:w_var-h2o_time_lag:VPD-h2o_time_lag:un_h2o_flux-h2o_time_lag:mean_value-h2o_time_lag:w_var-RH:u_star_-RH:un_H-VPD:un_Tau-VPD:un_H-VPD:un_h2o_flux-u_star_:TKE-u_star_:T_star_-u_star_:un_Tau-u_star_:un_H-u_star_:un_LE-u_star_:mean_value-u_star_:h2o_signal_strength_7200-TKE:T_star_-TKE:un_Tau-TKE:un_H-TKE:un_LE-TKE:un_h2o_flux-TKE:mean_value-TKE:w_var-TKE:w_div_h2o_cov-TKE:h2o_signal_strength_7200-T_star_:un_H-T_star_:mean_value-T_star_:w_var-T_star_:w_div_h2o_cov-un_Tau:un_h2o_flux-un_Tau:w_var-un_Tau:h2o_signal_strength_7200-un_H:un_h2o_flux-un_H:w_var-un_H:h2o_signal_strength_7200-un_LE:mean_value-un_LE:w_var-un_LE:w_div_h2o_cov-un_h2o_flux:mean_value-un_h2o_flux:w_var-un_h2o_flux:h2o_signal_strength_7200-DOY:un_Tau-rand_err_Tau:h2o_signal_strength_7200-H:co2_flux-rand_err_LE:u_star_-rand_err_co2_flux:un_h2o_flux-rand_err_h2o_flux:T_star_-rand_err_h2o_flux:un_H-rand_err_h2o_flux:w_var-h2o_time_lag:un_H-RH:TKE-RH:un_h2o_flux-u_star_:un_h2o_flux-T_star_:un_Tau-T_star_:un_LE-un_Tau:un_H-un_Tau:mean_value-un_Tau:w_div_h2o_cov-un_H:un_LE-un_H:mean_value-un_LE:un_h2o_flux-un_h2o_flux:w_div_h2o_cov-mean_value:w_var-mean_value:w_div_h2o_cov-w_var:h2o_signal_strength_7200-w_div_h2o_cov:h2o_signal_strength_7200-co2_flux:un_Tau-VPD:u_star_-VPD:T_star_-w_var:w_div_h2o_cov,data=tbl) 
+    
+Проводим заключительный анализ и убеждаемся в том, что модель полностью удовлетворяет нашим требованиям 
+
+    coef(model4) 
+    resid(model4) 
+    confint(model4) 
+    summary(model4)
+    anova(model4)
+
+               Response: h2o_flux
+                                          Df Sum Sq Mean Sq    F value    Pr(>F)    
+    DOY                                    1  16.20   16.20 5.6516e+10 < 2.2e-16 ***
+    Tau                                    1 137.16  137.16 4.7847e+11 < 2.2e-16 ***
+    rand_err_Tau                           1 217.63  217.63 7.5916e+11 < 2.2e-16 ***
+    H                                      1 417.70  417.70 1.4571e+12 < 2.2e-16 ***
+    LE                                     1 370.24  370.24 1.2915e+12 < 2.2e-16 ***
+    rand_err_LE                            1   0.00    0.00 1.5542e+06 < 2.2e-16 ***
+    co2_flux                               1   0.00    0.00 2.2109e+04 < 2.2e-16 ***
+    rand_err_co2_flux                      1   0.00    0.00 4.3151e+05 < 2.2e-16 ***
+    rand_err_h2o_flux                      1   0.01    0.01 3.9286e+07 < 2.2e-16 ***
+    h2o_time_lag                           1   0.00    0.00 3.7090e+04 < 2.2e-16 ***
+    VPD                                    1   0.00    0.00 3.4891e+02 < 2.2e-16 ***
+    u_star_                                1   0.00    0.00 5.3087e+04 < 2.2e-16 ***
+    TKE                                    1   0.00    0.00 1.9961e+02 < 2.2e-16 ***
+    T_star_                                1   0.00    0.00 1.3191e+04 < 2.2e-16 ***
+    un_Tau                                 1   0.00    0.00 3.8615e+02 < 2.2e-16 ***
+    un_H                                   1   0.00    0.00 2.4310e+05 < 2.2e-16 ***
+    un_LE                                  1   0.00    0.00 6.2493e+04 < 2.2e-16 ***
+    un_h2o_flux                            1   0.00    0.00 2.1275e+06 < 2.2e-16 ***
+    mean_value                             1   0.00    0.00 2.0583e+02 < 2.2e-16 ***
+    w_var                                  1   0.00    0.00 3.7709e+02 < 2.2e-16 ***
+    w_div_h2o_cov                          1   0.00    0.00 8.7219e+01 < 2.2e-16 ***
+    h2o_signal_strength_7200               1   0.00    0.00 2.6290e+02 < 2.2e-16 ***
+    DOY:Tau                                1   0.00    0.00 6.6155e+01 1.013e-15 ***
+    DOY:rand_err_Tau                       1   0.00    0.00 1.6294e+03 < 2.2e-16 ***
+    DOY:H                                  1   0.00    0.00 2.3560e+01 1.367e-06 ***
+    DOY:LE                                 1   0.00    0.00 1.2003e+03 < 2.2e-16 ***
+    DOY:rand_err_LE                        1   0.00    0.00 9.5960e+00 0.0019944 ** 
+    DOY:co2_flux                           1   0.00    0.00 1.1938e+01 0.0005687 ***
+    DOY:rand_err_co2_flux                  1   0.00    0.00 2.9305e+01 7.435e-08 ***
+    DOY:rand_err_h2o_flux                  1   0.00    0.00 2.1242e+02 < 2.2e-16 ***
+    DOY:h2o_time_lag                       1   0.00    0.00 9.1872e+00 0.0024883 ** 
+    DOY:RH                                 1   0.00    0.00 8.2227e+01 < 2.2e-16 ***
+    DOY:VPD                                1   0.00    0.00 1.4959e+01 0.0001156 ***
+    DOY:u_star_                            1   0.00    0.00 5.4069e+01 3.531e-13 ***
+    DOY:T_star_                            1   0.00    0.00 1.8349e+02 < 2.2e-16 ***
+    DOY:un_H                               1   0.00    0.00 5.9343e+02 < 2.2e-16 ***
+    DOY:un_LE                              1   0.00    0.00 1.9416e+02 < 2.2e-16 ***
+    DOY:un_h2o_flux                        1   0.00    0.00 4.2804e+02 < 2.2e-16 ***
+    DOY:mean_value                         1   0.00    0.00 3.5582e+01 3.195e-09 ***
+    DOY:w_var                              1   0.00    0.00 4.0980e+01 2.185e-10 ***
+    DOY:w_div_h2o_cov                      1   0.00    0.00 1.4647e+02 < 2.2e-16 ***
+    DOY:h2o_signal_strength_7200           1   0.00    0.00 5.5387e+01 1.858e-13 ***
+    Tau:rand_err_Tau                       1   0.00    0.00 4.5874e+01 1.952e-11 ***
+    Tau:H                                  1   0.00    0.00 2.9925e+02 < 2.2e-16 ***
+    Tau:LE                                 1   0.00    0.00 3.6366e+02 < 2.2e-16 ***
+    Tau:rand_err_LE                        1   0.00    0.00 1.0274e+02 < 2.2e-16 ***
+    Tau:co2_flux                           1   0.00    0.00 1.1501e+02 < 2.2e-16 ***
+    Tau:rand_err_co2_flux                  1   0.00    0.00 2.9074e+01 8.354e-08 ***
+    Tau:rand_err_h2o_flux                  1   0.00    0.00 7.1581e+03 < 2.2e-16 ***
+    Tau:u_star_                            1   0.00    0.00 1.3184e+01 0.0002940 ***
+    Tau:TKE                                1   0.00    0.00 2.3824e+01 1.195e-06 ***
+    Tau:T_star_                            1   0.00    0.00 7.7814e+01 < 2.2e-16 ***
+    Tau:un_Tau                             1   0.00    0.00 1.1519e+01 0.0007110 ***
+    Tau:w_var                              1   0.00    0.00 2.3605e+01 1.336e-06 ***
+    rand_err_Tau:H                         1   0.00    0.00 4.7700e+01 7.959e-12 ***
+    rand_err_Tau:LE                        1   0.00    0.00 1.9083e+01 1.357e-05 ***
+    rand_err_Tau:rand_err_LE               1   0.00    0.00 6.1444e+01 9.837e-15 ***
+    rand_err_Tau:co2_flux                  1   0.00    0.00 4.3727e+01 5.624e-11 ***
+    rand_err_Tau:rand_err_co2_flux         1   0.00    0.00 3.2735e+01 1.326e-08 ***
+    rand_err_Tau:rand_err_h2o_flux         1   0.00    0.00 7.6920e+01 < 2.2e-16 ***
+    rand_err_Tau:h2o_time_lag              1   0.00    0.00 1.7594e+01 2.932e-05 ***
+    rand_err_Tau:TKE                       1   0.00    0.00 2.6047e+01 3.860e-07 ***
+    rand_err_Tau:T_star_                   1   0.00    0.00 6.7744e+00 0.0093590 ** 
+    rand_err_Tau:un_Tau                    1   0.00    0.00 9.3409e+00 0.0022894 ** 
+    rand_err_Tau:un_H                      1   0.00    0.00 1.1266e+01 0.0008135 ***
+    rand_err_Tau:un_LE                     1   0.00    0.00 3.6610e+01 1.914e-09 ***
+    H:h2o_time_lag                         1   0.00    0.00 1.9569e+01 1.056e-05 ***
+    H:T_star_                              1   0.00    0.00 1.9825e+01 9.262e-06 ***
+    H:un_Tau                               1   0.00    0.00 2.9305e+01 7.434e-08 ***
+    H:h2o_signal_strength_7200             1   0.00    0.00 8.2318e+00 0.0041870 ** 
+    LE:rand_err_LE                         1   0.00    0.00 6.1093e+01 1.166e-14 ***
+    LE:rand_err_h2o_flux                   1   0.00    0.00 1.1579e+01 0.0006884 ***
+    LE:h2o_time_lag                        1   0.00    0.00 1.6984e+01 4.023e-05 ***
+    LE:un_h2o_flux                         1   0.00    0.00 1.5952e+01 6.882e-05 ***
+    LE:w_div_h2o_cov                       1   0.00    0.00 5.1315e+01 1.355e-12 ***
+    LE:h2o_signal_strength_7200            1   0.00    0.00 6.0972e+01 1.236e-14 ***
+    rand_err_LE:co2_flux                   1   0.00    0.00 6.0514e+01 1.542e-14 ***
+    rand_err_LE:h2o_time_lag               1   0.00    0.00 2.7115e+01 2.246e-07 ***
+    rand_err_LE:T_star_                    1   0.00    0.00 4.4441e+01 3.954e-11 ***
+    rand_err_LE:un_h2o_flux                1   0.00    0.00 3.1090e+01 3.028e-08 ***
+    co2_flux:rand_err_h2o_flux             1   0.00    0.00 2.8452e+01 1.143e-07 ***
+    co2_flux:T_star_                       1   0.00    0.00 1.0070e+01 0.0015445 ** 
+    rand_err_h2o_flux:VPD                  1   0.00    0.00 1.4975e+01 0.0001147 ***
+    rand_err_h2o_flux:un_h2o_flux          1   0.00    0.00 1.2433e+03 < 2.2e-16 ***
+    rand_err_h2o_flux:w_div_h2o_cov        1   0.00    0.00 6.1709e+01 8.656e-15 ***
+    RH:VPD                                 1   0.00    0.00 4.1737e+01 1.503e-10 ***
+    RH:T_star_                             1   0.00    0.00 1.4598e+01 0.0001397 ***
+    VPD:h2o_signal_strength_7200           1   0.00    0.00 7.2751e+00 0.0070876 ** 
+    u_star_:w_var                          1   0.00    0.00 1.8028e+01 2.341e-05 ***
+    u_star_:w_div_h2o_cov                  1   0.00    0.00 9.5837e+00 0.0020077 ** 
+    T_star_:un_h2o_flux                    1   0.00    0.00 1.0444e+01 0.0012630 ** 
+    T_star_:h2o_signal_strength_7200       1   0.00    0.00 1.2911e+01 0.0003396 ***
+    un_Tau:un_LE                           1   0.00    0.00 2.5087e+01 6.282e-07 ***
+    un_H:w_div_h2o_cov                     1   0.00    0.00 7.0777e+00 0.0079070 ** 
+    un_LE:h2o_signal_strength_7200         1   0.00    0.00 3.5951e+01 2.658e-09 ***
+    mean_value:h2o_signal_strength_7200    1   0.00    0.00 3.4850e+01 4.604e-09 ***
+    
+![график 1](https://b.radikal.ru/b41/1803/42/9da8646bbafe.png)
+![график 2](https://c.radikal.ru/c35/1803/93/1f0d580e9ffa.png)
+![график 3](https://c.radikal.ru/c38/1803/44/6519fe351396.png)
+![график 4](https://c.radikal.ru/c37/1803/0c/d228f36518c0.png)
+
+##**СПАСИБО ЗА ВНИМАНИЕ**##
+![may the Force be with you](https://d.radikal.ru/d06/1803/3c/35e58d466d01.jpg)
